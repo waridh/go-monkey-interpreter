@@ -83,3 +83,39 @@ func testLetStatements(t *testing.T, expected string, s ast.Statement) bool {
 
 	return true
 }
+
+// TestReturnStatements does the basic checks for the functionalities of the
+// return statement parsing
+func TestReturnStatements(t *testing.T) {
+	input := `
+  return 5;
+  return 10;
+  return add(15);
+  `
+
+	l := lexer.New(input)
+	p := New(l)
+
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	if program == nil {
+		t.Fatalf("ParseProgram returned nil")
+	}
+	if len(program.Statements) != 3 {
+		t.Fatalf("ParseProgram did not return expected number of items. Expected 3, got %d", len(program.Statements))
+	}
+
+	for _, stmt := range program.Statements {
+		returnStmt, ok := stmt.(*ast.ReturnStatement)
+		if !ok {
+			t.Errorf("Expected ReturnStatement, but got %T", stmt)
+			continue
+		}
+
+		toklit := returnStmt.TokenLiteral()
+		if toklit != "return" {
+			t.Errorf("Expected TokenLiteral to be return, instead got %s", toklit)
+		}
+
+	}
+}

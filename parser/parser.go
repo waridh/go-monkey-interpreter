@@ -95,7 +95,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 
 	// This is where expression parsing would happen
 	// TODO: Implement the next expression ast node
-	for !p.peekStep(token.SEMICOLON) {
+	for !p.isPeekToken(token.SEMICOLON) {
 		p.nextToken()
 	}
 
