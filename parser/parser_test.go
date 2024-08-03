@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/waridh/go-monkey-interpreter/ast"
@@ -47,7 +49,11 @@ func TestLetStatements(t *testing.T) {
 		t.Fatalf("ParseProgram returned nil")
 	}
 	if len(program.Statements) != 3 {
-		t.Fatalf("ParseProgram did not return expected number of items. Expected 3, got %d", len(program.Statements))
+		var err bytes.Buffer
+		for i := range len(program.Statements) {
+			fmt.Fprintf(&err, "%s, Type: %T, TokenLiteral: %s, ", program.Statements[i].String(), program.Statements[i], program.Statements[i].TokenLiteral())
+		}
+		t.Fatalf("ParseProgram did not return expected number of items. Expected 3, got %d: %s", len(program.Statements), err.String())
 	}
 
 	for i, tt := range expected {
@@ -118,4 +124,133 @@ func TestReturnStatements(t *testing.T) {
 		}
 
 	}
+}
+
+func TestIntegerLiteralExpression(t *testing.T) {
+	input := `5;`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	expectedLen := 1
+	if len(program.Statements) != expectedLen {
+		t.Fatalf("ParseProgram did not return expected number of items. Expected %d, got %d", expectedLen, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Errorf("Could not get ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	intLit, ok := stmt.Expression.(*ast.IntegerLiteral)
+
+	if !ok {
+		t.Errorf("Could not get %s, got %T", "IntegerLiteral", program.Statements[0])
+	}
+
+	if intLit.Value != 5 {
+		t.Errorf("ident.Value expected %d, got %d", 5, intLit.Value)
+	}
+
+	if intLit.TokenLiteral() != "5" {
+		t.Errorf("TokentLiteral expected %s, got %q", "5", intLit.TokenLiteral())
+	}
+}
+
+func TestIdentifierExpression(t *testing.T) {
+	input := `foobar;`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	expectedLen := 1
+	if len(program.Statements) != expectedLen {
+		t.Fatalf("ParseProgram did not return expected number of items. Expected %d, got %d", expectedLen, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Errorf("Could not get ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	ident, ok := stmt.Expression.(*ast.Identifier)
+
+	if !ok {
+		t.Errorf("Could not get %s, got %T", "Identifier", program.Statements[0])
+	}
+
+	if ident.Value != "foobar" {
+		t.Errorf("ident.Value expected foobar, got %q", ident.Value)
+	}
+
+	if ident.TokenLiteral() != "foobar" {
+		t.Errorf("TokentLiteral expected %s, got %q", "foobar", ident.TokenLiteral())
+	}
+}
+
+func TestPrefixExpression(t *testing.T) {
+	prefixTests := []struct {
+		input        string
+		operator     string
+		integerValue int64
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for _, test := range prefixTests {
+		l := lexer.New(test.input)
+		p := New(l)
+
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Statements) != 1 {
+			t.Errorf("Expected program.Statement to have %d elements, got %d", 1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Errorf("Expected ast.ExpressionStatement but got %T", program.Statements[0])
+		}
+
+		expr, ok := stmt.Expression.(*ast.PrefixExpression)
+
+		if !ok {
+			t.Fatalf("Expected ast.PrefixExpression, got %T", stmt.Expression)
+		}
+
+		if expr.Operator != test.operator {
+			t.Fatalf("Expected %s, but got %s", test.operator, expr.Operator)
+		}
+
+		if !testIntegerLiteralExpression(t, expr.Right, test.integerValue) {
+			return
+		}
+	}
+}
+
+func testIntegerLiteralExpression(t *testing.T, expr ast.Expression, expected int64) bool {
+	lit, ok := expr.(*ast.IntegerLiteral)
+
+	if !ok {
+		t.Errorf("Expression not IntegerLiteral, got %T", expr)
+		return false
+	}
+	if lit.Value != expected {
+		t.Errorf("IntegerLiteral does not hold the expected value. Expected: %d, got %d", expected, lit.Value)
+		return false
+	}
+	if lit.TokenLiteral() != fmt.Sprintf("%d", expected) {
+		t.Errorf("TokenLiteral mismatch, expected %d, got %s", expected, lit.TokenLiteral())
+	}
+
+	return true
 }

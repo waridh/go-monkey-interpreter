@@ -78,6 +78,7 @@ func (l *Lexer) skipWhiteSpace() {
 func (l *Lexer) NextToken() token.Token {
 	// Handle the single charcters first
 	var tok token.Token
+	l.skipWhiteSpace()
 
 	switch l.ch {
 	case 0:
@@ -132,7 +133,6 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	l.readChar()
-	l.skipWhiteSpace()
 	return tok
 }
 
