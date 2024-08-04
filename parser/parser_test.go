@@ -13,6 +13,12 @@ type Test struct {
 	expectedIdentifier string
 }
 
+type infixTest struct {
+	left     any
+	operator string
+	right    any
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	es := p.Errors()
 
@@ -263,17 +269,50 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"-a * b", "((-a) * b)"},
-		{"!-a", "(!(-a))"},
-		{"a + b + c", "((a + b) + c)"},
-		{"a + b - c", "((a + b) - c)"},
-		{"a * b * c", "((a * b) * c)"},
-		{"a * b / c", "((a * b) / c)"},
-		{"a + b / c", "(a + (b / c))"},
-		{"a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"},
-		{"3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"},
-		{"5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"},
-		{"5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"},
+		{
+			"-a * b",
+			"((-a) * b)",
+		},
+		{
+			"!-a",
+			"(!(-a))",
+		},
+		{
+			"a + b + c",
+			"((a + b) + c)",
+		},
+		{
+			"a + b - c",
+			"((a + b) - c)",
+		},
+		{
+			"a * b * c",
+			"((a * b) * c)",
+		},
+		{
+			"a * b / c",
+			"((a * b) / c)",
+		},
+		{
+			"a + b / c",
+			"(a + (b / c))",
+		},
+		{
+			"a + b * c + d / e - f",
+			"(((a + (b * c)) + (d / e)) - f)",
+		},
+		{
+			"3 + 4; -5 * 5",
+			"(3 + 4)((-5) * 5)",
+		},
+		{
+			"5 > 4 == 3 < 4",
+			"((5 > 4) == (3 < 4))",
+		},
+		{
+			"5 < 4 != 3 > 4",
+			"((5 < 4) != (3 > 4))",
+		},
 		{
 			"3 + 4 * 5 == 3 * 1 + 4 * 5",
 			"((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
@@ -298,6 +337,26 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"3 < 2 == false",
 			"((3 < 2) == false)",
 		},
+		{
+			"(5 + 3) * 3",
+			"((5 + 3) * 3)",
+		},
+		{
+			"5 / (5 + 5)",
+			"(5 / (5 + 5))",
+		},
+		{
+			"5 + (5 + 5) + 5",
+			"((5 + (5 + 5)) + 5)",
+		},
+		{
+			"-(5 + 5)",
+			"(-(5 + 5))",
+		},
+		{
+			"!(true == true)",
+			"(!(true == true))",
+		},
 	}
 
 	for _, test := range tests {
@@ -308,6 +367,79 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		if actual != test.expected {
 			t.Errorf("Expected %s, got %s", test.expected, actual)
 		}
+	}
+}
+
+func TestIfExpression(t *testing.T) {
+	input := []struct {
+		input       string
+		condition   infixTest
+		consequence any
+		alternative any
+	}{
+		{
+			"if (x < y) { x }",
+			infixTest{"x", "<", "y"},
+			"x",
+			nil,
+		},
+		{
+			"if (x < y) { x } else { y }",
+			infixTest{"x", "<", "y"},
+			"x",
+			"y",
+		},
+	}
+
+	for _, tt := range input {
+		program := getProgram(t, tt.input)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("Expected length of %d, got %d", 1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", program.Statements[0])
+		}
+
+		expr, ok := stmt.Expression.(*ast.IfExpression)
+
+		if !ok {
+			t.Fatalf("Unable to cast to ast.IfExpression, got %T", stmt.Expression)
+		}
+
+		if !testInfixExpression(t, expr.Condition, tt.condition.left, tt.condition.operator, tt.condition.right) {
+			return
+		}
+
+		consequence, ok := expr.Consequence.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", expr.Consequence.Statements[0])
+		}
+
+		if !testLiteralExpression(t, consequence.Expression, tt.consequence) {
+			return
+		}
+
+		alternative := expr.Alternative
+		if alternative == nil {
+			if tt.alternative != nil {
+				t.Fatalf("Expected Alternative to be %t, but got nil", tt.alternative)
+			}
+		} else {
+			alt, ok := alternative.Statements[0].(*ast.ExpressionStatement)
+			if !ok {
+				t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", alternative.Statements[0])
+			}
+
+			if !testLiteralExpression(t, alt.Expression, tt.alternative) {
+				return
+			}
+		}
+
 	}
 }
 
@@ -353,7 +485,19 @@ func TestBooleanExpression(t *testing.T) {
 	}
 }
 
+func testNilExpression(t *testing.T, expr ast.Expression) bool {
+	if expr == nil {
+		return true
+	} else {
+		t.Errorf("Expected nil, got %T", expr)
+		return false
+	}
+}
+
 func testLiteralExpression(t *testing.T, expr ast.Expression, expected interface{}) bool {
+	if expected == nil {
+		return testNilExpression(t, expr)
+	}
 	switch v := expected.(type) {
 	case int:
 		return testIntegerLiteralExpression(t, expr, int64(v))

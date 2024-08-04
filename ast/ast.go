@@ -180,3 +180,45 @@ func (ie *InfixExpression) String() string {
 
 	return out.String()
 }
+
+type IfExpression struct {
+	Token       token.Token
+	Condition   Expression
+	Consequence *BlockStatement
+	Alternative *BlockStatement
+}
+
+func (ife *IfExpression) expressionNode()      {}
+func (ife *IfExpression) TokenLiteral() string { return ife.Token.Literal }
+func (ife *IfExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("if")
+	out.WriteString(ife.Condition.String())
+	out.WriteString(" ")
+	out.WriteString(ife.Consequence.String())
+
+	if ife.Alternative != nil {
+		out.WriteString("else")
+		out.WriteString(ife.Alternative.String())
+	}
+
+	return out.String()
+}
+
+type BlockStatement struct {
+	Token      token.Token
+	Statements []Statement
+}
+
+func (bs *BlockStatement) statementNode()       {}
+func (bs *BlockStatement) TokenLiteral() string { return bs.Token.Literal }
+func (bs *BlockStatement) String() string {
+	var out bytes.Buffer
+
+	for _, statement := range bs.Statements {
+		out.WriteString(statement.String())
+	}
+
+	return out.String()
+}
