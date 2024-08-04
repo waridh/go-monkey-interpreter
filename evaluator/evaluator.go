@@ -24,6 +24,10 @@ func Eval(node ast.Node) object.Object {
 	case *ast.PrefixExpression:
 		right := Eval(node.Right)
 		return evalPrefixOperator(node.Operator, right)
+	case *ast.InfixExpression:
+		left := Eval(node.Left)
+		right := Eval(node.Right)
+		return evalInfixOperator(node.Operator, left, right)
 	}
 
 	return nil
@@ -38,12 +42,64 @@ func evalStatements(node []ast.Statement) object.Object {
 	return result
 }
 
+func evalInfixOperator(operator string, left object.Object, right object.Object) object.Object {
+	switch {
+	case left.Type() == right.Type():
+		switch {
+		case left.Type() == object.INTEGER_OBJ:
+			leftVal := left.(*object.Integer).Value
+			rightVal := right.(*object.Integer).Value
+			return evalInfixIntegerExpression(operator, leftVal, rightVal)
+		case left.Type() == object.BOOLEAN_OBJ:
+			return evalInfixBooleanExpression(operator, left, right)
+		default:
+			return NULL
+		}
+	default:
+		return NULL
+	}
+}
+
 func evalPrefixOperator(operator string, right object.Object) object.Object {
 	switch operator {
 	case "!":
 		return evalPrefixBang(right)
 	case "-":
 		return evalPrefixMinus(right)
+	default:
+		return NULL
+	}
+}
+
+func evalInfixIntegerExpression(operator string, left int64, right int64) object.Object {
+	switch operator {
+	case "+":
+		return &object.Integer{Value: left + right}
+	case "-":
+		return &object.Integer{Value: left - right}
+	case "*":
+		return &object.Integer{Value: left * right}
+	case "/":
+		return &object.Integer{Value: left / right}
+	case "<":
+		return &object.Boolean{Value: left < right}
+	case ">":
+		return &object.Boolean{Value: left > right}
+	case "==":
+		return &object.Boolean{Value: left == right}
+	case "!=":
+		return &object.Boolean{Value: left != right}
+	default:
+		return NULL
+	}
+}
+
+func evalInfixBooleanExpression(operator string, left object.Object, right object.Object) object.Object {
+	switch operator {
+	case "==":
+		return booleanObjectOfNativeBool(left == right)
+	case "!=":
+		return booleanObjectOfNativeBool(left != right)
 	default:
 		return NULL
 	}
