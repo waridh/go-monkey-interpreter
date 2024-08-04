@@ -26,6 +26,14 @@ func TestEvalIntegerExpression(t *testing.T) {
 			"10;",
 			10,
 		},
+		{
+			"-10;",
+			-10,
+		},
+		{
+			"-5",
+			-5,
+		},
 	}
 
 	for _, tt := range tests {
@@ -63,6 +71,51 @@ func TestEvalBooleanExpression(t *testing.T) {
 	}
 }
 
+func TestBangPrefixExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{
+			"!true",
+			false,
+		},
+		{
+			"!false",
+			true,
+		},
+		{
+			"!false;",
+			true,
+		},
+		{
+			"!true;",
+			false,
+		},
+		{
+			"!!true",
+			true,
+		},
+		{
+			"!!false",
+			false,
+		},
+		{
+			"!5",
+			false,
+		},
+		{
+			"!!5",
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		testLiteralObject(t, evaluated, tt.expected)
+	}
+}
+
 func testEval(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -90,7 +143,7 @@ func testIntegerObject(t *testing.T, input object.Object, expected int64) bool {
 	}
 	objType := input.Type()
 	if objType != object.INTEGER_OBJ {
-		t.Errorf("Expected %q, got %q", object.INTEGER_OBJ, input.Type())
+		t.Errorf("Expected %q, got %q for input: %q", object.INTEGER_OBJ, input.Type(), input.Inspect())
 		return false
 	}
 
