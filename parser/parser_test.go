@@ -1,17 +1,12 @@
 package parser
 
 import (
-	"bytes"
 	"fmt"
 	"testing"
 
 	"github.com/waridh/go-monkey-interpreter/ast"
 	"github.com/waridh/go-monkey-interpreter/lexer"
 )
-
-type Test struct {
-	expectedIdentifier string
-}
 
 type infixTest struct {
 	left     any
@@ -47,37 +42,32 @@ func getProgram(t *testing.T, input string) *ast.Program {
 }
 
 func TestLetStatements(t *testing.T) {
-	input := `
-  let x = 5;
-  let y = 10;
-  let foobar = 838383;
-  `
-
-	expected := []Test{
-		{"x"},
-		{"y"},
-		{"foobar"},
+	expected := []struct {
+		input              string
+		expectedIdentifier string
+		expectedValue      any
+	}{
+		{"let x = 5;", "x", 5},
+		{"let y = 10;", "y", 10},
+		{"let foobar = 838383;", "foobar", 838383},
 	}
 
-	program := getProgram(t, input)
+	for _, tt := range expected {
+		program := getProgram(t, tt.input)
 
-	if len(program.Statements) != 3 {
-		var err bytes.Buffer
-		for i := range len(program.Statements) {
-			fmt.Fprintf(&err, "%s, Type: %T, TokenLiteral: %s, ", program.Statements[i].String(), program.Statements[i], program.Statements[i].TokenLiteral())
+		if len(program.Statements) != 1 {
+			t.Fatalf("ParseProgram did not return expected number of items. Expected 1, got %d", len(program.Statements))
 		}
-		t.Fatalf("ParseProgram did not return expected number of items. Expected 3, got %d: %s", len(program.Statements), err.String())
-	}
 
-	for i, tt := range expected {
-		stmt := program.Statements[i]
-		if !testLetStatements(t, tt.expectedIdentifier, stmt) {
+		stmt := program.Statements[0]
+
+		if !testLetStatements(t, stmt, tt.expectedIdentifier, tt.expectedValue) {
 			return
 		}
 	}
 }
 
-func testLetStatements(t *testing.T, expected string, s ast.Statement) bool {
+func testLetStatements(t *testing.T, s ast.Statement, iden string, value any) bool {
 	if s.TokenLiteral() != "let" {
 		t.Errorf("TokenLiteral of let statement != let")
 		return false
@@ -90,13 +80,17 @@ func testLetStatements(t *testing.T, expected string, s ast.Statement) bool {
 		return false
 	}
 
-	if letStmt.Name.Value != expected {
-		t.Errorf("letStmt.Name.Value != %s, got %s", expected, letStmt.Name.Value)
+	if letStmt.Name.Value != iden {
+		t.Errorf("letStmt.Name.Value != %s, got %s", iden, letStmt.Name.Value)
 		return false
 	}
 
-	if letStmt.Name.TokenLiteral() != expected {
-		t.Errorf("s.Name != %s, got %s", expected, letStmt.Name)
+	if letStmt.Name.TokenLiteral() != iden {
+		t.Errorf("s.Name != %s, got %s", iden, letStmt.Name)
+		return false
+	}
+
+	if !testLiteralExpression(t, letStmt.Value, value) {
 		return false
 	}
 
@@ -106,23 +100,34 @@ func testLetStatements(t *testing.T, expected string, s ast.Statement) bool {
 // TestReturnStatements does the basic checks for the functionalities of the
 // return statement parsing
 func TestReturnStatements(t *testing.T) {
-	input := `
-  return 5;
-  return 10;
-  return add(15);
-  `
-
-	program := getProgram(t, input)
-
-	if len(program.Statements) != 3 {
-		t.Fatalf("ParseProgram did not return expected number of items. Expected 3, got %d", len(program.Statements))
+	tests := []struct {
+		input string
+		value any
+	}{
+		{
+			"return 5;",
+			5,
+		},
+		{
+			"return 10;",
+			10,
+		},
+		{
+			"return foobar;",
+			"foobar",
+		},
 	}
 
-	for _, stmt := range program.Statements {
-		returnStmt, ok := stmt.(*ast.ReturnStatement)
+	for _, tt := range tests {
+		program := getProgram(t, tt.input)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("ParseProgram did not return expected number of items. Expected %d, got %d", 1, len(program.Statements))
+		}
+
+		returnStmt, ok := program.Statements[0].(*ast.ReturnStatement)
 		if !ok {
-			t.Errorf("Expected ReturnStatement, but got %T", stmt)
-			continue
+			t.Errorf("Expected ReturnStatement, but got %T", program.Statements[0])
 		}
 
 		toklit := returnStmt.TokenLiteral()
@@ -130,6 +135,9 @@ func TestReturnStatements(t *testing.T) {
 			t.Errorf("Expected TokenLiteral to be return, instead got %s", toklit)
 		}
 
+		if !testLiteralExpression(t, returnStmt.ReturnValue, tt.value) {
+			return
+		}
 	}
 }
 
@@ -357,6 +365,18 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"!(true == true)",
 			"(!(true == true))",
 		},
+		{
+			"a + add(a * c) + d",
+			"((a + add((a * c))) + d)",
+		},
+		{
+			"add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+			"add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+		},
+		{
+			"add(a + b + c * d / f + g)",
+			"add((((a + b) + ((c * d) / f)) + g))",
+		},
 	}
 
 	for _, test := range tests {
@@ -440,6 +460,195 @@ func TestIfExpression(t *testing.T) {
 			}
 		}
 
+	}
+}
+
+func TestFunctionLiteralExpression(t *testing.T) {
+	input := `fn(x, y) {x + y};`
+	program := getProgram(t, input)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("Expected length of %d, got %d", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	expr, ok := stmt.Expression.(*ast.FunctionLiteral)
+
+	if !ok {
+		t.Fatalf("Unable to cast to ast.FunctionLiteral, got %T", stmt.Expression)
+	}
+
+	if len(expr.Parameter) != 2 {
+		t.Fatalf("Expected %d parameters, but got %d", 2, len(expr.Parameter))
+	}
+
+	if !testLiteralExpression(t, expr.Parameter[0], "x") {
+		return
+	}
+	if !testLiteralExpression(t, expr.Parameter[1], "y") {
+		return
+	}
+
+	body, ok := expr.Body.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Fatalf("Expected ast.ExpressionStatement, but got %T", expr.Body.Statements[0])
+	}
+
+	if !testInfixExpression(t, body.Expression, "x", "+", "y") {
+		return
+	}
+}
+
+func TestFunctionParameterParsing(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedParams []string
+	}{
+		{
+			"fn(){};",
+			[]string{},
+		},
+		{
+			"fn(a){};",
+			[]string{"a"},
+		},
+		{
+			"fn(a, b){};",
+			[]string{"a", "b"},
+		},
+		{
+			"fn(a, b, c){};",
+			[]string{"a", "b", "c"},
+		},
+	}
+
+	for _, tt := range tests {
+		program := getProgram(t, tt.input)
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("Expected %q, got %q", "ExpressionStatement", program.Statements[0])
+		}
+
+		fn, ok := stmt.Expression.(*ast.FunctionLiteral)
+
+		if !ok {
+			t.Fatalf("Expected %q, got %q", "ast.FunctionLiteral", stmt.Expression)
+		}
+
+		if len(fn.Parameter) != len(tt.expectedParams) {
+			t.Errorf("Expected %d parameters, got %d", len(tt.expectedParams), len(fn.Parameter))
+		}
+
+		for i, exp := range tt.expectedParams {
+			testLiteralExpression(t, fn.Parameter[i], exp)
+		}
+	}
+}
+
+func TestCallExpression(t *testing.T) {
+	input := `add(1, 2 * 3, 4 + 5);`
+	program := getProgram(t, input)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("Expected length of %d, got %d", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	expr, ok := stmt.Expression.(*ast.CallExpression)
+
+	if !ok {
+		t.Fatalf(
+			"Unable to cast to %s, got %T",
+			"ast.CallExpression",
+			stmt.Expression,
+		)
+	}
+
+	if !testIdentifierExpression(t, expr.Function, "add") {
+		return
+	}
+
+	if len(expr.Arguments) != 3 {
+		t.Fatalf("Expected %d arguments, but got %d", 3, len(expr.Arguments))
+	}
+
+	if !testLiteralExpression(t, expr.Arguments[0], 1) {
+		return
+	}
+
+	if !testInfixExpression(t, expr.Arguments[1], 2, "*", 3) {
+		return
+	}
+
+	if !testInfixExpression(t, expr.Arguments[2], 4, "+", 5) {
+		return
+	}
+}
+
+func TestCallExpressionArgumentParsing(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedParams []string
+	}{
+		{
+			"add();",
+			[]string{},
+		},
+		{
+			"add(a);",
+			[]string{"a"},
+		},
+		{
+			"add(a, b);",
+			[]string{"a", "b"},
+		},
+		{
+			"add(a, b, c);",
+			[]string{"a", "b", "c"},
+		},
+		{
+			"add(1 + 1, b, c);",
+			[]string{"(1 + 1)", "b", "c"},
+		},
+		{
+			"add(1 + 1, a + b * c, c);",
+			[]string{"(1 + 1)", "(a + (b * c))", "c"},
+		},
+	}
+
+	for _, tt := range tests {
+		program := getProgram(t, tt.input)
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("Expected %q, got %q", "ExpressionStatement", program.Statements[0])
+		}
+
+		fn, ok := stmt.Expression.(*ast.CallExpression)
+
+		if !ok {
+			t.Fatalf("Expected %q, got %q", "ast.CallExpression", stmt.Expression)
+		}
+
+		if len(fn.Arguments) != len(tt.expectedParams) {
+			t.Errorf("Expected %d parameters, got %d", len(tt.expectedParams), len(fn.Arguments))
+		}
+
+		for i, exp := range tt.expectedParams {
+			testExpressionString(t, fn.Arguments[i], exp)
+		}
 	}
 }
 
@@ -610,6 +819,14 @@ func testBooleanExpression(t *testing.T, expr ast.Expression, expected bool) boo
 
 	if bo.TokenLiteral() != fmt.Sprintf("%t", expected) {
 		t.Errorf("TokenLiteral mismatch, expected %t, got %q", expected, bo.TokenLiteral())
+		return false
+	}
+	return true
+}
+
+func testExpressionString(t *testing.T, expr ast.Expression, expected string) bool {
+	if expr.String() != expected {
+		t.Errorf("Expected %q, but got %q", expected, expr.String())
 		return false
 	}
 	return true

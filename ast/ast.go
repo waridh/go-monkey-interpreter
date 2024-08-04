@@ -2,7 +2,9 @@ package ast
 
 import (
 	"bytes"
+	"strings"
 
+	"github.com/waridh/go-monkey-interpreter/functools"
 	"github.com/waridh/go-monkey-interpreter/token"
 )
 
@@ -219,6 +221,55 @@ func (bs *BlockStatement) String() string {
 	for _, statement := range bs.Statements {
 		out.WriteString(statement.String())
 	}
+
+	return out.String()
+}
+
+type FunctionLiteral struct {
+	Token     token.Token
+	Parameter []*Identifier
+	Body      *BlockStatement
+}
+
+func (fn *FunctionLiteral) expressionNode()      {}
+func (fn *FunctionLiteral) TokenLiteral() string { return fn.Token.Literal }
+func (fn *FunctionLiteral) String() string {
+	var out bytes.Buffer
+
+	params := functools.Map(
+		fn.Parameter, func(x *Identifier) string {
+			return x.String()
+		})
+
+	out.WriteString("fn")
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") ")
+	out.WriteString(fn.Body.String())
+
+	return out.String()
+}
+
+type CallExpression struct {
+	Token     token.Token
+	Function  Expression
+	Arguments []Expression
+}
+
+func (ce *CallExpression) expressionNode()      {}
+func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
+func (ce *CallExpression) String() string {
+	var out bytes.Buffer
+
+	params := functools.Map(
+		ce.Arguments, func(x Expression) string {
+			return x.String()
+		})
+
+	out.WriteString(ce.Function.String())
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(")")
 
 	return out.String()
 }
