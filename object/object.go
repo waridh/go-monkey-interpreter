@@ -23,6 +23,7 @@ const (
 	FUNCTION_OBJ     = "FUNCTION"
 	STRING_OBJ       = "STRING"
 	BUILTIN_OBJ      = "BUILTIN"
+	ARRAY_OBJ        = "ARRAY"
 )
 
 type Object interface {
@@ -90,6 +91,22 @@ type String struct {
 
 func (str *String) Inspect() string  { return str.Value }
 func (str *String) Type() ObjectType { return STRING_OBJ }
+
+type Array struct {
+	Elements []Object
+}
+
+func (arr *Array) Type() ObjectType { return ARRAY_OBJ }
+func (arr *Array) Inspect() string {
+	var out bytes.Buffer
+
+	ele := functools.Map(arr.Elements, func(x Object) string { return x.Inspect() })
+	out.WriteString("[")
+	out.WriteString(strings.Join(ele, ", "))
+	out.WriteString("]")
+
+	return out.String()
+}
 
 type Builtin struct {
 	Fn BuiltinFunction

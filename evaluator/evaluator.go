@@ -23,10 +23,79 @@ var builtins = map[string]*object.Builtin{
 			if err := builtinLenCheck("len", 1, args); err != nil {
 				return err
 			}
-			if err := builtinTypeCheck("len", args, object.STRING_OBJ); err != nil {
+			switch arg := args[0].(type) {
+			case *object.String:
+				return &object.Integer{Value: int64(len(arg.Value))}
+			case *object.Array:
+				return &object.Integer{Value: int64(len(arg.Elements))}
+			default:
+				return newError("argument to `%s` not supported, got=%s", "len", arg.Type())
+			}
+		},
+	},
+	"first": {
+		Fn: func(args ...object.Object) object.Object {
+			if err := builtinLenCheck("len", 1, args); err != nil {
 				return err
 			}
-			return &object.Integer{Value: int64(len(args[0].(*object.String).Value))}
+			switch arg := args[0].(type) {
+			case *object.Array:
+				if len(arg.Elements) == 0 {
+					return NULL
+				}
+				return arg.Elements[0]
+			default:
+				return newError("argument to `%s` not supported, got=%s", "first", arg.Type())
+			}
+		},
+	},
+	"last": {
+		Fn: func(args ...object.Object) object.Object {
+			if err := builtinLenCheck("len", 1, args); err != nil {
+				return err
+			}
+			switch arg := args[0].(type) {
+			case *object.Array:
+				if len(arg.Elements) == 0 {
+					return NULL
+				}
+				return arg.Elements[len(arg.Elements)-1]
+			default:
+				return newError("argument to `%s` not supported, got=%s", "last", arg.Type())
+			}
+		},
+	},
+	"rest": {
+		Fn: func(args ...object.Object) object.Object {
+			if err := builtinLenCheck("len", 1, args); err != nil {
+				return err
+			}
+			switch arg := args[0].(type) {
+			case *object.Array:
+				if len(arg.Elements) == 0 {
+					return &object.Array{Elements: []object.Object{}}
+				}
+				return &object.Array{Elements: arg.Elements[1:]}
+			default:
+				return newError("argument to `%s` not supported, got=%s", "rest", arg.Type())
+			}
+		},
+	},
+	"push": {
+		Fn: func(args ...object.Object) object.Object {
+			if err := builtinLenCheck("len", 2, args); err != nil {
+				return err
+			}
+			switch arg := args[0].(type) {
+			case *object.Array:
+				length := len(arg.Elements)
+				newElements := make([]object.Object, length+1, length+1)
+				copy(newElements, arg.Elements)
+				newElements[length] = args[1]
+				return &object.Array{Elements: newElements}
+			default:
+				return newError("argument to `%s` not supported, got=%s", "len", arg.Type())
+			}
 		},
 	},
 }
@@ -34,19 +103,6 @@ var builtins = map[string]*object.Builtin{
 func builtinLenCheck(funcName string, expected int, args []object.Object) object.Object {
 	if len(args) != expected {
 		return newError("wrong number of arguments for %s. got=%d, want=%d", funcName, len(args), expected)
-	}
-	return nil
-}
-
-// This helper function will only check the types that is provided in the
-// parameter. If there is a length mismatch, the extra length in the args
-// will not be checked. If the args array is shorter than the types array,
-// the program will crash (skill issue)
-func builtinTypeCheck(funcName string, args []object.Object, types ...object.ObjectType) object.Object {
-	for i, expType := range types {
-		if expType != args[i].Type() {
-			return newError("argument to `%s` not supported, got=%s, want=%s", funcName, args[i].Type(), expType)
-		}
 	}
 	return nil
 }
@@ -69,25 +125,23 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.Integer{Value: node.Value}
 	case *ast.Boolean:
 		return booleanObjectOfNativeBool(node.Value)
-
 	case *ast.StringLiteral:
 		return &object.String{Value: node.Value}
-
 	case *ast.Identifier:
 		if val, ok := env.Get(node.Value); ok {
 			return val
 		}
-
 		if builtin, ok := builtins[node.Value]; ok {
 			return builtin
 		}
-
 		return newError("identity not found: %s", node.Value)
-
 	case *ast.FunctionLiteral:
 		params := node.Parameter
 		body := node.Body
 		return &object.Function{Parameter: params, Body: body, Env: env}
+	case *ast.ArrayLiteral:
+		ele := evalExpressions(node.Elements, env)
+		return &object.Array{Elements: ele}
 	case *ast.PrefixExpression:
 		right := Eval(node.Right, env)
 		if isError(right) {
@@ -118,9 +172,41 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return args[0]
 		}
 		return applyFunction(function, args)
+	case *ast.IndexExpression:
+		array := Eval(node.Left, env)
+		if isError(array) {
+			return array
+		}
+		index := Eval(node.Index, env)
+		if isError(index) {
+			return index
+		}
+		return evalIndex(array, index)
+	default:
+		return nil
 	}
+}
 
-	return nil
+func evalIndex(indexable object.Object, index object.Object) object.Object {
+	switch a := indexable.(type) {
+	case *object.Array:
+		if index.Type() != object.INTEGER_OBJ {
+			return newError("%s can only be indexed using %s", a.Type(), object.INTEGER_OBJ)
+		}
+		idx := index.(*object.Integer).Value
+		num_ele := int64(len(a.Elements))
+		if idx >= num_ele || idx < (-num_ele) {
+			return NULL
+		}
+
+		if idx < 0 {
+			idx = idx + int64(len(a.Elements))
+		}
+
+		return a.Elements[idx]
+	default:
+		return newError("%s does not support indexing", indexable.Type())
+	}
 }
 
 func applyFunction(function object.Object, args []object.Object) object.Object {

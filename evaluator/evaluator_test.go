@@ -398,11 +398,19 @@ func TestErrorHandling(t *testing.T) {
 		},
 		{
 			`len(1);`,
-			"argument to `len` not supported, got=INTEGER, want=STRING",
+			"argument to `len` not supported, got=INTEGER",
 		},
 		{
 			`len("hello", "world");`,
 			"wrong number of arguments for len. got=2, want=1",
+		},
+		{
+			`first(1);`,
+			"argument to `first` not supported, got=INTEGER",
+		},
+		{
+			`last(1);`,
+			"argument to `last` not supported, got=INTEGER",
 		},
 	}
 	for _, tt := range tests {
@@ -532,6 +540,147 @@ func TestBuiltinFunction(t *testing.T) {
 			`len("It's not quiet");`,
 			14,
 		},
+		{
+			`len([]);`,
+			0,
+		},
+		{
+			`len([1]);`,
+			1,
+		},
+		{
+			`len([1, 2*2]);`,
+			2,
+		},
+		{
+			`len([1, 2*2, 3+3]);`,
+			3,
+		},
+		{
+			`first([1, 2*2, 3+3]);`,
+			1,
+		},
+		{
+			`first([]);`,
+			nil,
+		},
+		{
+			`last([1, 2*2, 3+3]);`,
+			6,
+		},
+		{
+			`last([]);`,
+			nil,
+		},
+		{
+			`rest([]);`,
+			[]any{},
+		},
+		{
+			`rest([1]);`,
+			[]any{},
+		},
+		{
+			`rest([1, 2, 3, 4]);`,
+			[]any{2, 3, 4},
+		},
+		{
+			`rest(rest(rest(rest([1, 2, 3, 4]))));`,
+			[]any{},
+		},
+		{
+			`push([], 1);`,
+			[]any{1},
+		},
+	}
+	for _, tt := range tests {
+		testLiteralObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestArrayLiterals(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []any
+	}{
+		{
+			`[1, 2 * 2, 3 + 3];`,
+			[]any{1, 4, 6},
+		},
+	}
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		if !testLiteralObject(t, evaluated, tt.expected) {
+			return
+		}
+	}
+}
+
+func testArrayLiteral(t *testing.T, expr object.Object, expected []any) bool {
+	array, ok := expr.(*object.Array)
+	if !ok {
+		t.Fatalf("Cannot cast to %s, got %T", "object.Array", expr)
+		return false
+	}
+	if len(array.Elements) != len(expected) {
+		t.Fatalf("Expected %d elements, got %d", len(expected), len(array.Elements))
+		return false
+	}
+
+	for idx, ele := range array.Elements {
+		res := testLiteralObject(t, ele, expected[idx])
+		if !res {
+			return res
+		}
+	}
+	return true
+}
+
+func TestArrayIndexExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			"[1, 2, 3][0]",
+			1,
+		},
+		{
+			"[1, 2, 3][1]",
+			2,
+		},
+		{
+			"[1, 2, 3][2]",
+			3,
+		},
+		{
+			"let i = 0; [1][i]",
+			1,
+		},
+		{
+			"[1, 2, 3][1 + 1]",
+			3,
+		},
+		{
+			"let myArray = [1, 2, 3]; myArray[2];",
+			3,
+		},
+		{
+			"let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+			6,
+		},
+		{
+			"let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i];",
+			2,
+		},
+		{
+			"[1, 2, 3][3]",
+			nil,
+		},
+		{
+			"[1, 2, 3][-1]",
+			3,
+		},
 	}
 	for _, tt := range tests {
 		testLiteralObject(t, testEval(tt.input), tt.expected)
@@ -593,6 +742,11 @@ func testLiteralObject(t *testing.T, input object.Object, expected any) bool {
 		return testStringObject(t, input, v)
 	case nil:
 		return testNullObject(t, input)
+	case []any:
+		switch input.(type) {
+		case *object.Array:
+			return testArrayLiteral(t, input, v)
+		}
 	}
 
 	t.Errorf("Unhandled expected type for testLiteralObject. Got %T", expected)
