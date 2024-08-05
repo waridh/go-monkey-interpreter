@@ -208,6 +208,51 @@ func TestBangPrefixExpression(t *testing.T) {
 	}
 }
 
+func TestIfElseExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			"if (true) { 10 }",
+			10,
+		},
+		{
+			"if (false) { 10 } else { 11 }",
+			11,
+		},
+		{
+			"if (false) { 10 }",
+			nil,
+		},
+		{
+			"if (true) { 10 } else { 11 }",
+			10,
+		},
+		{
+			"if (1) { 10 }",
+			10,
+		},
+		{
+			"if (1==1) { 10 }",
+			10,
+		},
+		{
+			"if (1 == 2) { 10 }",
+			nil,
+		},
+		{
+			"if (1 < 4) { 10 }",
+			10,
+		},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		testLiteralObject(t, evaluated, tt.expected)
+	}
+}
+
 func testEval(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -219,12 +264,25 @@ func testLiteralObject(t *testing.T, input object.Object, expected any) bool {
 	switch v := expected.(type) {
 	case bool:
 		return testBooleanObject(t, input, v)
+	case int:
+		return testIntegerObject(t, input, int64(v))
 	case int64:
 		return testIntegerObject(t, input, v)
+	case nil:
+		return testNullObject(t, input)
 	}
 
 	t.Errorf("Unhandled expected type for testLiteralObject. Got %T", expected)
 	return false
+}
+
+func testNullObject(t *testing.T, input object.Object) bool {
+	if input != NULL {
+		t.Errorf("Expected NULL, but got %T (%+v)", input, input)
+		return false
+	} else {
+		return true
+	}
 }
 
 func testIntegerObject(t *testing.T, input object.Object, expected int64) bool {
