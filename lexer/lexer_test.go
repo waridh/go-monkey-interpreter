@@ -174,3 +174,17 @@ func TestNextToken6(t *testing.T) {
 	}
 	runLexerTest(t, tests, input)
 }
+
+func TestNextToken7(t *testing.T) {
+	input := `[1, 2];`
+
+	tests := []lexerTests{
+		{token.LBRACKET, "["},
+		{token.INT, "1"},
+		{token.COMMA, ","},
+		{token.INT, "2"},
+		{token.RBRACKET, "]"},
+		{token.SEMICOLON, ";"},
+	}
+	runLexerTest(t, tests, input)
+}
