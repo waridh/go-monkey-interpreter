@@ -272,6 +272,35 @@ func TestInfixExpression(t *testing.T) {
 	}
 }
 
+func TestStringLiteral(t *testing.T) {
+	infixTests := []struct {
+		input    string
+		expected string
+	}{
+		{`"testing";`, "testing"},
+		{`"hello world!";`, "hello world!"},
+	}
+
+	for _, test := range infixTests {
+
+		program := getProgram(t, test.input)
+
+		if len(program.Statements) != 1 {
+			t.Errorf("Expected program.Statement to have %d elements, got %d", 1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Errorf("Expected ast.ExpressionStatement but got %T, (%+v)", program.Statements[0], program.Statements)
+		}
+
+		if !testStringLiteral(t, stmt.Expression, test.expected) {
+			return
+		}
+	}
+}
+
 func TestOperatorPrecedenceParsing(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -692,6 +721,20 @@ func TestBooleanExpression(t *testing.T) {
 			return
 		}
 	}
+}
+
+func testStringLiteral(t *testing.T, expr ast.Expression, expected string) bool {
+	str, ok := expr.(*ast.StringLiteral)
+	if !ok {
+		t.Errorf("Unable to cast to %s. Got %T. (%+v)", "ast.StringLiteral", expr, expr)
+		return false
+	}
+
+	if str.Value != expected {
+		t.Errorf("Expected %q, got %q", expected, str.Value)
+		return false
+	}
+	return true
 }
 
 func testNilExpression(t *testing.T, expr ast.Expression) bool {

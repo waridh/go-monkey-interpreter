@@ -18,6 +18,7 @@ const (
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	ERROR_OBJ        = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
+	STRING_OBJ       = "STRING"
 )
 
 type Object interface {
@@ -78,6 +79,13 @@ func (fn *Function) Inspect() string {
 	return out.String()
 }
 func (fn *Function) Type() ObjectType { return FUNCTION_OBJ }
+
+type String struct {
+	Value string
+}
+
+func (str *String) Inspect() string  { return str.Value }
+func (str *String) Type() ObjectType { return STRING_OBJ }
 
 type Environment struct {
 	store map[string]Object

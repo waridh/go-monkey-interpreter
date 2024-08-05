@@ -163,6 +163,47 @@ func TestEvalBooleanExpression(t *testing.T) {
 	}
 }
 
+func TestStringExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			`"Hello World!";`,
+			"Hello World!",
+		},
+		{
+			`"Hello " + "World!";`,
+			"Hello World!",
+		},
+		{
+			`"Hello" + " " + "World!";`,
+			"Hello World!",
+		},
+		{
+			`"Hello" == "World!";`,
+			false,
+		},
+		{
+			`"Hello" != "World!";`,
+			true,
+		},
+		{
+			`"Hello" == "Hello";`,
+			true,
+		},
+		{
+			`"Hello" != "Hello";`,
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		testLiteralObject(t, evaluated, tt.expected)
+	}
+}
+
 func TestBangPrefixExpression(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -351,6 +392,10 @@ func TestErrorHandling(t *testing.T) {
 			"foobar",
 			"identity not found: foobar",
 		},
+		{
+			`"Hello" - "World"`,
+			"unknown operator: STRING - STRING",
+		},
 	}
 	for _, tt := range tests {
 		evaluated := testEval(tt.input)
@@ -513,6 +558,8 @@ func testLiteralObject(t *testing.T, input object.Object, expected any) bool {
 		return testIntegerObject(t, input, int64(v))
 	case int64:
 		return testIntegerObject(t, input, v)
+	case string:
+		return testStringObject(t, input, v)
 	case nil:
 		return testNullObject(t, input)
 	}
@@ -543,6 +590,37 @@ func testNullObject(t *testing.T, input object.Object) bool {
 	} else {
 		return true
 	}
+}
+
+func testStringObject(t *testing.T, input object.Object, expected string) bool {
+	// Type check
+	if input == nil {
+		t.Errorf("Expected String, got nil")
+		return false
+	}
+	objType := input.Type()
+	if objType != object.STRING_OBJ {
+		t.Errorf("Expected %q, got %q for input: %q", object.INTEGER_OBJ, input.Type(), input.Inspect())
+		return false
+	}
+
+	if input.Inspect() != expected {
+		t.Errorf("Expected %q, got %q", expected, input.Inspect())
+		return false
+	}
+
+	str, ok := input.(*object.String)
+
+	if !ok {
+		t.Errorf("Failed to cast Object into %s. Got %T", "String", input)
+		return false
+	}
+
+	if str.Value != expected {
+		t.Errorf("Expected representation to be %q, got %q", expected, str.Value)
+		return false
+	}
+	return true
 }
 
 func testIntegerObject(t *testing.T, input object.Object, expected int64) bool {

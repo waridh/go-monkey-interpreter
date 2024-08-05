@@ -162,3 +162,15 @@ func TestNextToken5(t *testing.T) {
 	}
 	runLexerTest(t, tests, input)
 }
+
+func TestNextToken6(t *testing.T) {
+	input := `"foobar"
+  "foo bar"
+  `
+
+	tests := []lexerTests{
+		{token.STRING, "foobar"},
+		{token.STRING, "foo bar"},
+	}
+	runLexerTest(t, tests, input)
+}

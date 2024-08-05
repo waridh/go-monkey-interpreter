@@ -75,6 +75,15 @@ func (l *Lexer) skipWhiteSpace() {
 	}
 }
 
+func (l *Lexer) readString() string {
+	l.readChar()
+	position := l.position
+	for l.ch != '"' && l.ch != 0 {
+		l.readChar()
+	}
+	return l.input[position:l.position]
+}
+
 func (l *Lexer) NextToken() token.Token {
 	// Handle the single charcters first
 	var tok token.Token
@@ -90,6 +99,9 @@ func (l *Lexer) NextToken() token.Token {
 		} else {
 			tok = newToken(token.ASSIGN, "=")
 		}
+	case '"':
+		tok = newToken(token.STRING, l.readString())
+
 	case '+':
 		tok = newToken(token.PLUS, "+")
 	case '(':

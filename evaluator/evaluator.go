@@ -36,6 +36,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.Boolean:
 		return booleanObjectOfNativeBool(node.Value)
 
+	case *ast.StringLiteral:
+		return &object.String{Value: node.Value}
+
 	case *ast.Identifier:
 		val, ok := env.Get(node.Value)
 		if !ok {
@@ -221,6 +224,8 @@ func evalInfixOperator(operator string, left object.Object, right object.Object)
 			return evalInfixIntegerExpression(operator, leftVal, rightVal)
 		case left.Type() == object.BOOLEAN_OBJ:
 			return evalInfixBooleanExpression(operator, left, right)
+		case left.Type() == object.STRING_OBJ:
+			return evalInfixStringExpression(operator, left, right)
 		default:
 			return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 		}
@@ -237,6 +242,21 @@ func evalPrefixOperator(operator string, right object.Object) object.Object {
 		return evalPrefixMinus(right)
 	default:
 		return newError("unknown operator: %s%s", operator, right.Type())
+	}
+}
+
+func evalInfixStringExpression(operator string, left, right object.Object) object.Object {
+	leftVal := left.(*object.String).Value
+	rightVal := right.(*object.String).Value
+	switch operator {
+	case "+":
+		return &object.String{Value: leftVal + rightVal}
+	case "==":
+		return &object.Boolean{Value: leftVal == rightVal}
+	case "!=":
+		return &object.Boolean{Value: leftVal != rightVal}
+	default:
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
