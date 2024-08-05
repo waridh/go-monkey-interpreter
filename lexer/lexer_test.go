@@ -188,3 +188,17 @@ func TestNextToken7(t *testing.T) {
 	}
 	runLexerTest(t, tests, input)
 }
+
+func TestNextToken8(t *testing.T) {
+	input := `{"foo": "bar"};`
+
+	tests := []lexerTests{
+		{token.LBRACE, "{"},
+		{token.STRING, "foo"},
+		{token.COLON, ":"},
+		{token.STRING, "bar"},
+		{token.RBRACE, "}"},
+		{token.SEMICOLON, ";"},
+	}
+	runLexerTest(t, tests, input)
+}

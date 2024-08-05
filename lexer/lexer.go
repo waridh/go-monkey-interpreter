@@ -120,6 +120,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.COMMA, l.ch)
 	case ';':
 		tok = newToken(token.SEMICOLON, l.ch)
+	case ':':
+		tok = newToken(token.COLON, l.ch)
 	case '!':
 		if l.peakAhead() == '=' {
 			tok = token.Token{Type: token.NOT_EQ, Literal: "!="}
