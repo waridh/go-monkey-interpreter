@@ -17,6 +17,40 @@ var (
 	NULL  = &object.Null{}
 )
 
+var builtins = map[string]*object.Builtin{
+	"len": {
+		Fn: func(args ...object.Object) object.Object {
+			if err := builtinLenCheck("len", 1, args); err != nil {
+				return err
+			}
+			if err := builtinTypeCheck("len", args, object.STRING_OBJ); err != nil {
+				return err
+			}
+			return &object.Integer{Value: int64(len(args[0].(*object.String).Value))}
+		},
+	},
+}
+
+func builtinLenCheck(funcName string, expected int, args []object.Object) object.Object {
+	if len(args) != expected {
+		return newError("wrong number of arguments for %s. got=%d, want=%d", funcName, len(args), expected)
+	}
+	return nil
+}
+
+// This helper function will only check the types that is provided in the
+// parameter. If there is a length mismatch, the extra length in the args
+// will not be checked. If the args array is shorter than the types array,
+// the program will crash (skill issue)
+func builtinTypeCheck(funcName string, args []object.Object, types ...object.ObjectType) object.Object {
+	for i, expType := range types {
+		if expType != args[i].Type() {
+			return newError("argument to `%s` not supported, got=%s, want=%s", funcName, args[i].Type(), expType)
+		}
+	}
+	return nil
+}
+
 func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
@@ -40,11 +74,15 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.String{Value: node.Value}
 
 	case *ast.Identifier:
-		val, ok := env.Get(node.Value)
-		if !ok {
-			return newError("identity not found: %s", node.Value)
+		if val, ok := env.Get(node.Value); ok {
+			return val
 		}
-		return val
+
+		if builtin, ok := builtins[node.Value]; ok {
+			return builtin
+		}
+
+		return newError("identity not found: %s", node.Value)
 
 	case *ast.FunctionLiteral:
 		params := node.Parameter
@@ -86,27 +124,32 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 }
 
 func applyFunction(function object.Object, args []object.Object) object.Object {
-	fn, ok := function.(*object.Function)
-	if !ok {
+	switch fn := function.(type) {
+	case *object.Function:
+		newEnv := object.NewEnclosedEnvironment(fn.Env)
+		if len(args) != len(fn.Parameter) {
+			var out bytes.Buffer
+			expected := functools.Map(fn.Parameter, func(x *ast.Identifier) string { return x.String() })
+			got := functools.Map(args, func(x object.Object) string { return x.Inspect() })
+			out.WriteString("missing parameters:\n")
+			out.WriteString("\texpected: ")
+			out.WriteString(strings.Join(expected, ", "))
+			out.WriteString("\n\tgot: ")
+			out.WriteString(strings.Join(got, ", "))
+			return newError(out.String())
+		}
+		for idx, arg := range args {
+			newEnv.Set(fn.Parameter[idx].Value, arg)
+		}
+		evaluated := Eval(fn.Body, newEnv)
+		return unwrapReturnValue(evaluated)
+
+	case *object.Builtin:
+		return fn.Fn(args...)
+
+	default:
 		return newError("not a function: %s", function.Type())
 	}
-	newEnv := object.NewEnclosedEnvironment(fn.Env)
-	if len(args) != len(fn.Parameter) {
-		var out bytes.Buffer
-		expected := functools.Map(fn.Parameter, func(x *ast.Identifier) string { return x.String() })
-		got := functools.Map(args, func(x object.Object) string { return x.Inspect() })
-		out.WriteString("missing parameters:\n")
-		out.WriteString("\texpected: ")
-		out.WriteString(strings.Join(expected, ", "))
-		out.WriteString("\n\tgot: ")
-		out.WriteString(strings.Join(got, ", "))
-		return newError(out.String())
-	}
-	for idx, arg := range args {
-		newEnv.Set(fn.Parameter[idx].Value, arg)
-	}
-	evaluated := Eval(fn.Body, newEnv)
-	return unwrapReturnValue(evaluated)
 }
 
 // Takes an array of ast.Expressions and return an array of the evaluated

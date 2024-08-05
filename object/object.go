@@ -9,7 +9,10 @@ import (
 	"github.com/waridh/go-monkey-interpreter/functools"
 )
 
-type ObjectType string
+type (
+	ObjectType      string
+	BuiltinFunction func(args ...Object) Object
+)
 
 const (
 	INTEGER_OBJ      = "INTEGER"
@@ -19,6 +22,7 @@ const (
 	ERROR_OBJ        = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
 	STRING_OBJ       = "STRING"
+	BUILTIN_OBJ      = "BUILTIN"
 )
 
 type Object interface {
@@ -86,6 +90,13 @@ type String struct {
 
 func (str *String) Inspect() string  { return str.Value }
 func (str *String) Type() ObjectType { return STRING_OBJ }
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (bi *Builtin) Inspect() string  { return "builtin function" }
+func (bi *Builtin) Type() ObjectType { return BUILTIN_OBJ }
 
 type Environment struct {
 	store map[string]Object

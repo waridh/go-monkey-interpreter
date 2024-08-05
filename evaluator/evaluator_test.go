@@ -396,6 +396,14 @@ func TestErrorHandling(t *testing.T) {
 			`"Hello" - "World"`,
 			"unknown operator: STRING - STRING",
 		},
+		{
+			`len(1);`,
+			"argument to `len` not supported, got=INTEGER, want=STRING",
+		},
+		{
+			`len("hello", "world");`,
+			"wrong number of arguments for len. got=2, want=1",
+		},
 	}
 	for _, tt := range tests {
 		evaluated := testEval(tt.input)
@@ -500,6 +508,29 @@ func TestFunctionApplication(t *testing.T) {
 		{
 			"let pos = fn(x) { return x > 0;}; pos(5);",
 			true,
+		},
+	}
+	for _, tt := range tests {
+		testLiteralObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestBuiltinFunction(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			`len("Hello");`,
+			5,
+		},
+		{
+			`len("");`,
+			0,
+		},
+		{
+			`len("It's not quiet");`,
+			14,
 		},
 	}
 	for _, tt := range tests {
