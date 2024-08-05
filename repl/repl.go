@@ -7,6 +7,7 @@ import (
 
 	"github.com/waridh/go-monkey-interpreter/evaluator"
 	"github.com/waridh/go-monkey-interpreter/lexer"
+	"github.com/waridh/go-monkey-interpreter/object"
 	"github.com/waridh/go-monkey-interpreter/parser"
 )
 
@@ -34,7 +35,8 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		evaluated := evaluator.Eval(program)
+		env := object.NewEnvironment()
+		evaluated := evaluator.Eval(program, env)
 		if evaluated != nil {
 			io.WriteString(out, evaluated.Inspect())
 			io.WriteString(out, "\n")

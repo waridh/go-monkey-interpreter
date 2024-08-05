@@ -308,11 +308,201 @@ func TestReturnStatements(t *testing.T) {
 	}
 }
 
+func TestErrorHandling(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			"5 + true;",
+			"type mismatch: INTEGER + BOOLEAN",
+		},
+		{
+			"5 + true; 5;",
+			"type mismatch: INTEGER + BOOLEAN",
+		},
+		{
+			"-true; 6;",
+			"unknown operator: -BOOLEAN",
+		},
+		{
+			"true + false;",
+			"unknown operator: BOOLEAN + BOOLEAN",
+		},
+		{
+			"5; true + false; 5;",
+			"unknown operator: BOOLEAN + BOOLEAN",
+		},
+		{
+			"if (10 > 1) {true + false};",
+			"unknown operator: BOOLEAN + BOOLEAN",
+		},
+		{
+			`
+    if (10 > 1) {
+      if (10 > 1) {
+        return true + false;
+      }
+      return 1;
+    };`,
+			"unknown operator: BOOLEAN + BOOLEAN",
+		},
+		{
+			"foobar",
+			"identity not found: foobar",
+		},
+	}
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		testErrorObject(t, evaluated, tt.expected)
+	}
+}
+
+func TestLetStatement(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			"let a = 5; a;",
+			5,
+		},
+		{
+			"let a = 5 < 10; a;",
+			true,
+		},
+		{
+			"let a = 7 - 12; a;",
+			-5,
+		},
+		{
+			"let a = 5; let b = a * 3; b;",
+			15,
+		},
+		{
+			"let a = 5; let b = a * 2; let c = a + b; c;",
+			15,
+		},
+	}
+	for _, tt := range tests {
+		testLiteralObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestFunctionObject(t *testing.T) {
+	input := `fn(x) {x + 2;};`
+
+	evaluated := testEval(input)
+	fn, ok := evaluated.(*object.Function)
+
+	if !ok {
+		t.Errorf("Expected %s, got %T. (%+v)", "object.Function", evaluated, evaluated)
+	}
+
+	numParams := 1
+	if len(fn.Parameter) != numParams {
+		t.Errorf("Expected %d parameter, but got %d. (%+v)", numParams, len(fn.Parameter), fn)
+	}
+
+	paramName := "x"
+	if fn.Parameter[0].String() != paramName {
+		t.Errorf("Expected %q as parameter, but got %q. (%+v)", paramName, fn.Parameter[0].String(), fn)
+	}
+
+	expectedBody := "(x + 2)"
+	if fn.Body.String() != expectedBody {
+		t.Errorf("Expected body to be %s, got %s. (%+v)", expectedBody, fn.Body.String(), fn)
+	}
+}
+
+func TestFunctionApplication(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			"let identity = fn(x) {x;}; identity(5);",
+			5,
+		},
+		{
+			"let identity = fn(x) {return x;}; identity(5);",
+			5,
+		},
+		{
+			"let double = fn(x) {return x * 2;}; double(5);",
+			10,
+		},
+		{
+			"let add = fn(x, y) {return x + y;}; add(2, 3);",
+			5,
+		},
+		{
+			"let add = fn(x, y) {return x + y;}; add(2, add(2,1));",
+			5,
+		},
+		{
+			"fn(x, y) {return x * y;}(2, 3);",
+			6,
+		},
+		{
+			"let not = fn(x) {!x;}; not(5);",
+			false,
+		},
+		{
+			"let not = fn(x) {!x;}; not(false);",
+			true,
+		},
+		{
+			"let pos = fn(x) { return x > 0;}; pos(5);",
+			true,
+		},
+	}
+	for _, tt := range tests {
+		testLiteralObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestClosures(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			`
+      let newAdder = fn(x) {
+      return fn(y) {x + y;};
+      };
+
+      let addThree = newAdder(3);
+      addThree(2);
+      `,
+			5,
+		},
+		{
+			`
+      let newAdder = fn(x) {
+      return fn(y) {x + y;};
+      };
+
+      let apply = fn(x, y) {
+      return x(y);
+      }
+      apply(apply(newAdder, 2), 3);
+      `,
+			5,
+		},
+	}
+	for _, tt := range tests {
+		testLiteralObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
 func testEval(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)
 	program := p.ParseProgram()
-	return Eval(program)
+	env := object.NewEnvironment()
+	return Eval(program, env)
 }
 
 func testLiteralObject(t *testing.T, input object.Object, expected any) bool {
@@ -329,6 +519,21 @@ func testLiteralObject(t *testing.T, input object.Object, expected any) bool {
 
 	t.Errorf("Unhandled expected type for testLiteralObject. Got %T", expected)
 	return false
+}
+
+func testErrorObject(t *testing.T, input object.Object, expected string) bool {
+	err, ok := input.(*object.Error)
+	if !ok {
+		t.Errorf("Was not able to cast output into error object. Got %T. (%+v)", input, input)
+		return false
+	}
+
+	if err.Message != expected {
+		t.Errorf("Expected: %q, got %q. (%+v)", expected, err.Message, err)
+		return false
+	}
+
+	return true
 }
 
 func testNullObject(t *testing.T, input object.Object) bool {
