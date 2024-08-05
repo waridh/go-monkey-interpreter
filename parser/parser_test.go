@@ -458,6 +458,14 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"add(a + b + c * d / f + g)",
 			"add((((a + b) + ((c * d) / f)) + g))",
 		},
+		{
+			"a * [1, 2, 3, 4][b * c] * d",
+			"((a * ([1, 2, 3, 4][(b * c)])) * d)",
+		},
+		{
+			"add(a * b[2], b[1], 2 * [1, 2][1])",
+			"add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+		},
 	}
 
 	for _, test := range tests {
@@ -733,6 +741,43 @@ func TestCallExpressionArgumentParsing(t *testing.T) {
 	}
 }
 
+func TestIndexExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected any
+	}{
+		{
+			"myArray[1 + 1]",
+			infixTest{
+				left:     "myArray",
+				operator: "[",
+				right: infixTest{
+					left:     1,
+					operator: "+",
+					right:    1,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		program := getProgram(t, tt.input)
+
+		if len(program.Statements) != 1 {
+			t.Fatalf("Expected length of %d, got %d", 1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Fatalf("Unable to cast to ast.ExpressionStatement, got %T", program.Statements[0])
+		}
+
+		if !testExpression(t, stmt.Expression, tt.expected) {
+			return
+		}
+	}
+}
+
 func TestBooleanExpression(t *testing.T) {
 	input := []struct {
 		input    string
@@ -822,23 +867,35 @@ func testExpression(t *testing.T, expr ast.Expression, expected interface{}) boo
 }
 
 func testInfixExpression(t *testing.T, expr ast.Expression, left any, operator string, right any) bool {
-	op, ok := expr.(*ast.InfixExpression)
+	switch op := expr.(type) {
+	case *ast.InfixExpression:
+		if !testExpression(t, op.Left, left) {
+			return false
+		}
 
-	if !ok {
+		if op.Operator != operator {
+			t.Errorf("Operator does not match. Expected %q, got %q", operator, op.Operator)
+			return false
+		}
+
+		if !testExpression(t, op.Right, right) {
+			return false
+		}
+	case *ast.IndexExpression:
+		if !testExpression(t, op.Left, left) {
+			return false
+		}
+
+		if operator != "[" {
+			t.Errorf("Operator does not match. Expected %q, got %q", operator, "[")
+			return false
+		}
+
+		if !testExpression(t, op.Index, right) {
+			return false
+		}
+	default:
 		t.Errorf("Unable to cast Expression to InfixExpression. Got %T", expr)
-		return false
-	}
-
-	if !testExpression(t, op.Left, left) {
-		return false
-	}
-
-	if op.Operator != operator {
-		t.Errorf("Operator does not match. Expected %q, got %q", operator, op.Operator)
-		return false
-	}
-
-	if !testExpression(t, op.Right, right) {
 		return false
 	}
 
