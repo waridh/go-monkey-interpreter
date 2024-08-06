@@ -19,6 +19,11 @@ type prefixTest struct {
 	right    any
 }
 
+type pairTest struct {
+	key   any
+	value any
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	es := p.Errors()
 
@@ -328,9 +333,86 @@ func TestArrayLiteral(t *testing.T) {
 			t.Errorf("Expected ast.ExpressionStatement but got %T, (%+v)", program.Statements[0], program.Statements)
 		}
 
-		if !testArrayLiteral(t, stmt.Expression, test.expected) {
+		if !testExpression(t, stmt.Expression, test.expected) {
 			return
 		}
+	}
+}
+
+func TestHashLiteral(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected map[any]any
+	}{
+		{`{foo: 1, 64: 2, true: 3};`, map[any]any{
+			"foo": 1,
+			64:    2,
+			true:  3,
+		}},
+		{`{1: 1 + 10, 64: 2 * 2, true: 3 / 3};`, map[any]any{
+			1:    infixTest{1, "+", 10},
+			64:   infixTest{2, "*", 2},
+			true: infixTest{3, "/", 3},
+		}},
+	}
+
+	for _, test := range tests {
+
+		program := getProgram(t, test.input)
+
+		if len(program.Statements) != 1 {
+			t.Errorf("Expected program.Statement to have %d elements, got %d", 1, len(program.Statements))
+		}
+
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+		if !ok {
+			t.Errorf("Expected ast.ExpressionStatement but got %T, (%+v)", program.Statements[0], program.Statements)
+		}
+
+		hash, ok := stmt.Expression.(*ast.HashLiteral)
+
+		if !ok {
+			t.Errorf("Unable to cast to ast.HashLiteral. Got %T", stmt.Expression)
+		}
+		for key, value := range hash.Pairs {
+			switch k := key.(type) {
+			case *ast.IntegerLiteral:
+				testExpression(t, value, test.expected[int(k.Value)])
+			case *ast.Boolean:
+				testExpression(t, value, test.expected[k.Value])
+			case *ast.Identifier:
+				testExpression(t, value, test.expected[k.Value])
+			default:
+				t.Fatalf("Unexpected branch")
+			}
+		}
+	}
+}
+
+func TestEmptyHashLiteral(t *testing.T) {
+	input := "{}"
+
+	program := getProgram(t, input)
+
+	if len(program.Statements) != 1 {
+		t.Errorf("Expected program.Statement to have %d elements, got %d", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+	if !ok {
+		t.Errorf("Expected ast.ExpressionStatement but got %T, (%+v)", program.Statements[0], program.Statements)
+	}
+
+	hash, ok := stmt.Expression.(*ast.HashLiteral)
+
+	if !ok {
+		t.Errorf("Unable to cast to ast.HashLiteral. Got %T", stmt.Expression)
+	}
+
+	if len(hash.Pairs) != 0 {
+		t.Errorf("Expected 0 elements, got %d", len(hash.Pairs))
 	}
 }
 
@@ -843,7 +925,7 @@ func testNilExpression(t *testing.T, expr ast.Expression) bool {
 	}
 }
 
-func testExpression(t *testing.T, expr ast.Expression, expected interface{}) bool {
+func testExpression(t *testing.T, expr ast.Expression, expected any) bool {
 	if expected == nil {
 		return testNilExpression(t, expr)
 	}
@@ -860,6 +942,11 @@ func testExpression(t *testing.T, expr ast.Expression, expected interface{}) boo
 		return testInfixExpression(t, expr, v.left, v.operator, v.right)
 	case prefixTest:
 		return testPrefixExpression(t, expr, v.operator, v.right)
+	case []any:
+		switch e := expr.(type) {
+		case *ast.ArrayLiteral:
+			return testArrayLiteral(t, e, v)
+		}
 	}
 
 	t.Errorf("Unsupported expected type, got expr: %T, and expected: %T", expr, expected)
