@@ -521,6 +521,102 @@ func TestFunctionApplication(t *testing.T) {
 			"let pos = fn(x) { return x > 0;}; pos(5);",
 			true,
 		},
+		{
+			`
+let fib_aux = fn(target, sub_two, sub_one, counter) {
+  if (target == counter) {
+    sub_two + sub_one
+  } else {
+    fib_aux(target, sub_one, sub_one + sub_two, counter + 1)
+  }
+};
+let fib = fn(x){
+  if (x == 0) {
+    0
+  } else {
+    if (x == 1) {
+      1
+    } else {
+      fib_aux(x, 0, 1, 2)
+    }
+  }
+};
+      fib(0);
+      `,
+			0,
+		},
+		{
+			`
+let fib_aux = fn(target, sub_two, sub_one, counter) {
+  if (target == counter) {
+    sub_two + sub_one
+  } else {
+    fib_aux(target, sub_one, sub_one + sub_two, counter + 1)
+  }
+};
+let fib = fn(x){
+  if (x == 0) {
+    0
+  } else {
+    if (x == 1) {
+      1
+    } else {
+      fib_aux(x, 0, 1, 2)
+    }
+  }
+};
+      fib(1);
+      `,
+			1,
+		},
+		{
+			`
+let fib_aux = fn(target, sub_two, sub_one, counter) {
+  if (target == counter) {
+    sub_two + sub_one
+  } else {
+    fib_aux(target, sub_one, sub_one + sub_two, counter + 1)
+  }
+};
+let fib = fn(x){
+  if (x == 0) {
+    0
+  } else {
+    if (x == 1) {
+      1
+    } else {
+      fib_aux(x, 0, 1, 2)
+    }
+  }
+};
+      fib(2);
+      `,
+			1,
+		},
+		{
+			`
+let fib_aux = fn(target, sub_two, sub_one, counter) {
+  if (target == counter) {
+    sub_two + sub_one
+  } else {
+    fib_aux(target, sub_one, sub_one + sub_two, counter + 1)
+  }
+};
+let fib = fn(x){
+  if (x == 0) {
+    0
+  } else {
+    if (x == 1) {
+      1
+    } else {
+      fib_aux(x, 0, 1, 2)
+    }
+  }
+};
+      fib(15);
+      `,
+			610, // Testing fibonacci
+		},
 	}
 	for _, tt := range tests {
 		testLiteralObject(t, testEval(tt.input), tt.expected)
