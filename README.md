@@ -13,7 +13,7 @@ order functions.
 
 ## Example Code
 
-The following is the O(n) implementation of Fibonacci.
+The following is an implementation of the Fibonacci sequence.
 
 ```monkey
 let fib_aux = fn(target, sub_two, sub_one, counter) {
